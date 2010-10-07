@@ -45,7 +45,11 @@ public:
    * @return a shared ptr which points to a Cassandra client
    */
   std::tr1::shared_ptr<Cassandra> create();
-  std::tr1::shared_ptr<Cassandra> create(int framed_transport);
+  std::tr1::shared_ptr<Cassandra> create(bool framed_transport);
+
+  int getPort() const;
+  const std::string &getHost() const;
+  const std::string &getURL() const;
 
 private:
 
@@ -53,7 +57,9 @@ private:
                                                               int port);
   org::apache::cassandra::CassandraClient *createThriftClient(const std::string &host,
                                                               int port, 
-                                                              int framed_transport);
+                                                              bool framed_transport);
+
+  std::string url;
 
   std::string host;
 

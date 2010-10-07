@@ -11,11 +11,11 @@
 #include <set>
 #include <sstream>
 
-#include <libgenthrift/Cassandra.h>
+#include "libgenthrift/Cassandra.h"
 
-#include "cassandra.h"
-#include "keyspace.h"
-#include "exception.h"
+#include "libcassandra/cassandra.h"
+#include "libcassandra/keyspace.h"
+#include "libcassandra/exception.h"
 
 using namespace std;
 using namespace org::apache::cassandra;
@@ -30,6 +30,22 @@ inline string toString(const T &tt)
   ss << tt;
   return ss.str();
 }
+
+
+Cassandra::Cassandra()
+  :
+    thrift_client(NULL),
+	host(),
+	port(0),
+	cluster_name(),
+	server_version(),
+	config_file(),
+	key_spaces(),
+	token_map(),
+	keyspace_map()
+{
+}
+
 
 Cassandra::Cassandra(CassandraClient *in_thrift_client,
                      const string &in_host,
@@ -69,18 +85,18 @@ set<string> Cassandra::getKeyspaces()
 }
 
 
-Keyspace *Cassandra::getKeyspace(const string &name)
+tr1::shared_ptr<Keyspace> Cassandra::getKeyspace(const string &name)
 {
   return getKeyspace(name, DCQUORUM);
 }
 
 
-Keyspace *Cassandra::getKeyspace(const string &name,
-                                 ConsistencyLevel level)
+tr1::shared_ptr<Keyspace> Cassandra::getKeyspace(const string &name,
+                                                 ConsistencyLevel level)
 {
   string keymap_name= buildKeyspaceMapName(name, level);
-  Keyspace *ret= keyspace_map[keymap_name];
-  if (! ret)
+  map<string, tr1::shared_ptr<Keyspace> >::iterator key_it= keyspace_map.find(keymap_name);
+  if (key_it == keyspace_map.end())
   {
     getKeyspaces();
     set<string>::iterator it= key_spaces.find(name);
@@ -88,12 +104,7 @@ Keyspace *Cassandra::getKeyspace(const string &name,
     {
       map< string, map<string, string> > keyspace_desc;
       thrift_client->describe_keyspace(keyspace_desc, name);
-      ret= new(std::nothrow) Keyspace(this, name, keyspace_desc, level);
-      if (! ret)
-      {
-        /* throw an exception */
-        throw(Error("Error allocating memory for Keyspace.", 0));
-      }
+      tr1::shared_ptr<Keyspace> ret(new Keyspace(this, name, keyspace_desc, level));
       keyspace_map[keymap_name]= ret;
     }
     else
@@ -102,15 +113,14 @@ Keyspace *Cassandra::getKeyspace(const string &name,
       throw(NotFoundException());
     }
   }
-  return ret;
+  return keyspace_map[keymap_name];
 }
 
 
-void Cassandra::removeKeyspace(Keyspace *k)
+void Cassandra::removeKeyspace(tr1::shared_ptr<Keyspace> k)
 {
   string keymap_name= buildKeyspaceMapName(k->getName(), k->getConsistencyLevel());
   keyspace_map.erase(keymap_name);
-  delete k; /* not sure if this is a good idea here */
 }
 
 
